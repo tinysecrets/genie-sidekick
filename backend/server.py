@@ -392,6 +392,28 @@ app.include_router(auth_router)
 app.include_router(genie_router)
 
 
+# ---------- serve Vite frontend (built in Docker stage 1) ----------
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+
+FRONTEND_DIR = os.environ.get("FRONTEND_DIR", "/app/frontend_dist")
+if os.path.isdir(FRONTEND_DIR):
+    _assets = os.path.join(FRONTEND_DIR, "assets")
+    if os.path.isdir(_assets):
+        app.mount("/assets", StaticFiles(directory=_assets), name="frontend_assets")
+    _index_html = os.path.join(FRONTEND_DIR, "index.html")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        if full_path:
+            candidate = os.path.join(FRONTEND_DIR, full_path)
+            if os.path.isfile(candidate):
+                return FileResponse(candidate)
+        return FileResponse(_index_html)
+
+    logger.info(f"Frontend static serving enabled from {FRONTEND_DIR}")
+
+
 if __name__ == "__main__":
     import uvicorn
 
