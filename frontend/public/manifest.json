@@ -1,0 +1,25 @@
+{
+  "short_name": "Ember",
+  "name": "Ember — a real companion",
+  "description": "An honest AI companion that remembers you and never lies.",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#D05C42",
+  "background_color": "#F9F8F6"
+}
