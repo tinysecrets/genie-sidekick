@@ -1,0 +1,119 @@
+{
+  "theme": {
+    "archetype": "1 - Organic & Earthy",
+    "mode": "light",
+    "vibe": "Personal, warm, honest, editorial, intimate. Feels like writing in a journal or reading a letter from a trusted friend, intentionally rejecting the cold/scripted feel of typical AI chat interfaces."
+  },
+  "colors": {
+    "background": {
+      "main": "#F9F8F6",
+      "sidebar": "#F1EFE9",
+      "memory_panel": "#EEF1EC",
+      "input_bg": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#2C2C28",
+      "secondary": "#7A7A71",
+      "accent": "#D05C42",
+      "inverse": "#FFFFFF"
+    },
+    "chat_bubbles": {
+      "user_bg": "#EBE8E0",
+      "user_text": "#2C2C28",
+      "ai_bg": "transparent",
+      "ai_text": "#2C2C28"
+    },
+    "border": "#E3E0D8",
+    "primary_cta": {
+      "bg": "#D05C42",
+      "text": "#FFFFFF",
+      "hover_bg": "#BA4C33"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Cormorant Garamond, serif",
+      "body": "Outfit, sans-serif",
+      "ai_response": "Newsreader, serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1_empty_state": "text-4xl md:text-5xl font-light tracking-tight text-[#2C2C28] font-serif",
+      "h2_sidebar": "text-xs font-semibold uppercase tracking-[0.2em] text-[#7A7A71] mb-4",
+      "h3_panel": "text-lg font-medium text-[#2C2C28] font-serif",
+      "body_ui": "text-sm text-[#2C2C28] font-sans",
+      "chat_user": "text-base text-[#2C2C28] font-sans leading-relaxed",
+      "chat_ai": "text-lg text-[#2C2C28] font-serif leading-relaxed tracking-normal"
+    },
+    "google_fonts_url": "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Outfit:wght@300;400;500&display=swap"
+  },
+  "layout_and_spacing": {
+    "structure": "Three-column desktop layout (Sidebar, Main Chat, Memory Panel). On mobile, Sidebar and Memory Panel are drawers/sheets.",
+    "sidebar": "w-64 border-r border-[#E3E0D8] bg-[#F1EFE9] h-screen flex flex-col p-6",
+    "main_chat": "flex-1 flex flex-col h-screen bg-[#F9F8F6] relative",
+    "memory_panel": "w-72 border-l border-[#E3E0D8] bg-[#EEF1EC] h-screen flex flex-col p-6 overflow-y-auto",
+    "chat_container": "max-w-3xl mx-auto w-full px-4 md:px-8 py-8 flex-1 overflow-y-auto flex flex-col gap-8",
+    "input_area": "max-w-3xl mx-auto w-full px-4 md:px-8 pb-8 pt-4"
+  },
+  "components": {
+    "user_message": {
+      "wrapper": "flex justify-end w-full",
+      "bubble": "bg-[#EBE8E0] rounded-2xl rounded-tr-sm px-6 py-4 max-w-[80%] text-[#2C2C28] font-sans text-base shadow-sm"
+    },
+    "ai_message": {
+      "wrapper": "flex justify-start w-full group",
+      "bubble": "bg-transparent py-2 max-w-[85%] text-[#2C2C28] font-serif text-lg leading-relaxed",
+      "avatar": "w-8 h-8 rounded-full overflow-hidden mr-4 shrink-0 shadow-sm border border-[#E3E0D8]"
+    },
+    "input_box": {
+      "container": "relative flex items-end w-full bg-white rounded-3xl border border-[#E3E0D8] shadow-sm focus-within:ring-2 focus-within:ring-[#D05C42]/20 focus-within:border-[#D05C42] transition-all p-2 pl-6",
+      "textarea": "flex-1 max-h-32 min-h-[44px] bg-transparent border-none focus:ring-0 resize-none py-3 font-sans text-base placeholder:text-[#7A7A71]",
+      "send_button": "w-10 h-10 rounded-full bg-[#D05C42] text-white flex items-center justify-center hover:bg-[#BA4C33] transition-colors shrink-0 m-1"
+    },
+    "memory_card": {
+      "container": "bg-white/60 backdrop-blur-sm border border-[#E3E0D8] rounded-xl p-4 mb-3 shadow-sm hover:shadow-md transition-shadow group relative",
+      "text": "text-sm text-[#2C2C28] font-sans"
+    },
+    "sidebar_item": {
+      "container": "w-full text-left px-3 py-2 rounded-lg hover:bg-[#E3E0D8] transition-colors text-sm text-[#2C2C28] font-sans truncate mb-1"
+    }
+  },
+  "motion_and_interactions": {
+    "message_streaming": "Words should fade in smoothly (opacity transition) rather than pop in jarringly.",
+    "hover_states": "Subtle background color changes for list items. Copy buttons should fade in on group hover (opacity-0 to opacity-100).",
+    "transitions": "Use 'transition-all duration-300 ease-out' for layout shifts and focus states."
+  },
+  "media_and_assets": {
+    "icons_library": "lucide-react",
+    "images": {
+      "ai_avatar_texture": {
+        "url": "https://images.unsplash.com/photo-1552688419-9949ce9dd731?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHdhdGVyY29sb3IlMjB0ZXh0dXJlJTIwdGVycmFjb3R0YSUyMHNhZ2V8ZW58MHx8fG9yYW5nZXwxNzc3MzYzNDk1fDA&ixlib=rb-4.1.0&q=85",
+        "usage": "Use this abstract terracotta/sage watercolor texture as the background for the AI's circular avatar."
+      },
+      "empty_state_bg": {
+        "url": "https://images.unsplash.com/photo-1772396867158-e26d9e6256b2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwzfHx3YXJtJTIwbW9ybmluZyUyMHN1bmxpZ2h0JTIwb3BlbiUyMG5vdGVib29rJTIwd29vZGVuJTIwZGVza3xlbnwwfHx8fDE3NzczNjM0OTV8MA&ixlib=rb-4.1.0&q=85",
+        "usage": "Use as a very subtle, faded background image (opacity-20, mix-blend-multiply) behind the empty state welcome message, or as a small rounded-2xl accent image."
+      }
+    }
+  },
+  "testing": {
+    "attributes": [
+      "data-testid='chat-input'",
+      "data-testid='send-button'",
+      "data-testid='user-message'",
+      "data-testid='ai-message'",
+      "data-testid='sidebar-history-item'",
+      "data-testid='memory-card'",
+      "data-testid='copy-message-button'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Inject the provided google_fonts_url into the index.html head.",
+    "Implement the 3-column layout using flexbox/grid. Hide sidebar and memory panel behind Sheet components on mobile.",
+    "Use Newsreader font specifically for the AI's rendered Markdown responses to give it an editorial, 'letter' feel.",
+    "Do NOT use typical gray/blue AI chat colors. Stick strictly to the warm earthy palette.",
+    "Ensure all interactive elements have the specified data-testid attributes.",
+    "For the AI Avatar, use the 'ai_avatar_texture' image URL as an object-cover background.",
+    "Markdown rendering should support code blocks, but keep the prose typography elegant (serif for AI)."
+  ]
+}
