@@ -1,0 +1,37 @@
+{
+  "summary": "Full E2E backend + frontend testing of Ember (Claude Sonnet 4.5 chat companion). 18/18 backend pytest cases PASS including health, conversation CRUD, multi-turn context (secret-word recall), auto-titling, memory CRUD with empty-content 400, and async background memory auto-extraction. 12/12 frontend Playwright flows PASS: empty state, quick-start prompt, thinking dots, AI markdown render, sidebar history, custom send, new conversation, switch conversation, memory add/edit/delete, conversation rename + delete, mobile sidebar/memory toggles. No 404/500/CORS errors observed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar history item (hover)", "issues": ["On hover, the absolutely-positioned rename+trash icons overlap the right edge of the conversation title text (e.g. 'Say exactly: hello from emb.' overlaps with trash icon). Consider adding right padding/pr-12 on the title button when group is hovered, or shorten truncation width on hover."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ember_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional polish) Reserve right-side space on hover in Sidebar history items so rename/trash icons don't overlap conversation title text."
+  ],
+  "critical_code_review_comments": [
+    "server.py /api/chat replays full prior history on every turn by re-sending each prior user message through LlmChat with the same session_id. Because emergentintegrations LlmChat already auto-tracks per-session history server-side, this likely double-records context and inflates token usage / latency on long conversations. Recommend either (a) rely solely on session_id-based history and only send the new user message, or (b) build a stateless LlmChat with session_id=uuid4() each call and feed the full prior turns explicitly — but not both.",
+    "extract_memories_async runs as fire-and-forget asyncio.create_task without tracking; on FastAPI shutdown these tasks may be cancelled mid-flight without logging. Acceptable for MVP but consider a background queue for production.",
+    "build_system_prompt() is called on every chat turn and re-fetches all memories (up to 500). Fine for now; consider caching with a short TTL if memories grow.",
+    "No pagination on GET /api/conversations or /api/memory (capped at 500). Adequate for MVP.",
+    "logger is defined AFTER it is referenced inside extract_memories_async (module-level order). Works because the function body executes later, but cleaner to define logger earlier in the file."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ember_api.py (created)"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% (12/12)"},
+  "test_credentials": "N/A (no auth in this app)",
+  "seed_data_creation": "All test data is TEST_-prefixed and cleaned up by the tests themselves (memories deleted, conversations deleted).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_ember_api.py. Reuse them for regression. The auto-memory test waits up to ~16s for background Claude Haiku extraction. Frontend uses data-testid throughout (chat-input, send-button, quick-start-prompt, sidebar-history-item, memory-card, memory-input, add-memory-button, edit-memory, delete-memory, rename-conversation, delete-conversation, new-conversation-button, open-sidebar, open-memory, etc.). Note: when iterating over Playwright element handles to check inner_text, do NOT use any(... async ...)—use explicit for-loop with await."
+}
