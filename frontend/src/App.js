@@ -224,7 +224,7 @@ function Sidebar({ conversations, currentId, onSelect, onNew, onDelete, onRename
             ) : (
               <button
                 onClick={() => { onSelect(c.id); onCloseMobile(); }}
-                className="w-full text-left px-3 py-2 rounded-lg text-sm text-[#2C2C28] font-body truncate flex items-center gap-2"
+                className="w-full text-left px-3 py-2 pr-14 rounded-lg text-sm text-[#2C2C28] font-body truncate flex items-center gap-2"
                 title={c.title}
               >
                 <MessageSquare size={13} className="text-[#7A7A71] shrink-0" />
