@@ -13,7 +13,6 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 
 ROOT_DIR = Path(__file__).parent
@@ -30,9 +29,9 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-MODEL_PROVIDER = "anthropic"
-MODEL_NAME = "claude-sonnet-4-5-20250929"
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')  # kept for backwards compat, unused with Ollama
+OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
+MODEL_NAME = os.environ.get('OLLAMA_MODEL', 'dolphin3')
 
 EMERGENT_AUTH_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 SESSION_DAYS = 7
