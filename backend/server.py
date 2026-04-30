@@ -174,24 +174,38 @@ async def get_chat_history(user_id: str, conversation_id: str) -> List[dict]:
     return msgs
 
 
+async def ollama_chat(system: str, user_text: str) -> str:
+    """Single-turn call to local Ollama. Returns the assistant's text."""
+    async with httpx.AsyncClient(timeout=180.0) as http:
+        r = await http.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={
+                "model": MODEL_NAME,
+                "stream": False,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+            },
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data.get("message", {}).get("content", "")
+
+
 async def extract_memories_async(user_id: str, user_text: str, assistant_text: str):
     try:
-        extractor = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"memory-extractor-{uuid.uuid4()}",
-            system_message=(
-                "You extract durable facts about a user from a single exchange. "
-                "Return ONLY a JSON array of short fact strings (max 12 words each). "
-                "Facts must be about the USER (preferences, identity, projects, relationships, goals, habits). "
-                "Not about the assistant. Not about general topics. "
-                'If nothing worth remembering, return []. '
-                'Examples: ["Prefers concise answers", "Works as a nurse in Seattle", "Has a dog named Moss"]. '
-                "Never invent. Only extract what's stated or strongly implied."
-            ),
-        ).with_model("anthropic", "claude-haiku-4-5-20251001")
-
+        system = (
+            "You extract durable facts about a user from a single exchange. "
+            "Return ONLY a JSON array of short fact strings (max 12 words each). "
+            "Facts must be about the USER (preferences, identity, projects, relationships, goals, habits). "
+            "Not about the assistant. Not about general topics. "
+            'If nothing worth remembering, return []. '
+            'Examples: ["Prefers concise answers", "Works as a nurse in Seattle", "Has a dog named Moss"]. '
+            "Never invent. Only extract what's stated or strongly implied."
+        )
         prompt = f"User said: {user_text}\n\nAssistant replied: {assistant_text}\n\nExtract user facts as JSON array."
-        response = await extractor.send_message(UserMessage(text=prompt))
+        response = await ollama_chat(system, prompt)
 
         text = response.strip()
         start = text.find('[')
@@ -218,7 +232,6 @@ async def extract_memories_async(user_id: str, user_text: str, assistant_text: s
             existing_set.add(fact.lower())
     except Exception as e:
         logger.warning(f"Memory extraction failed: {e}")
-
 
 # ---------- Auth Routes ----------
 @api_router.post("/auth/session")
