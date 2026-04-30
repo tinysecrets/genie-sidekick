@@ -301,7 +301,7 @@ async def auth_logout(request: Request, response: Response, authorization: Optio
 # ---------- App Routes ----------
 @api_router.get("/")
 async def root():
-    return {"message": "Ember is here.", "model": f"{MODEL_PROVIDER}/{MODEL_NAME}"}
+    return {"message": "Ember is here.", "model": MODEL_NAME}
 
 
 # Conversations
