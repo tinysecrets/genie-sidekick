@@ -365,6 +365,113 @@ async def get_messages(conv_id: str, user: User = Depends(get_user_from_request)
 
 
 # Chat
+FIND this whole function in backend/server.py and SELECT IT ALL:
+async def extract_memories_async(user_id: str, user_text: str, assistant_text: str):
+    try:
+        extractor = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"memory-extractor-{uuid.uuid4()}",
+            system_message=(
+                "You extract durable facts about a user from a single exchange. "
+                "Return ONLY a JSON array of short fact strings (max 12 words each). "
+                "Facts must be about the USER (preferences, identity, projects, relationships, goals, habits). "
+                "Not about the assistant. Not about general topics. "
+                'If nothing worth remembering, return []. '
+                'Examples: ["Prefers concise answers", "Works as a nurse in Seattle", "Has a dog named Moss"]. '
+                "Never invent. Only extract what's stated or strongly implied."
+            ),
+        ).with_model("anthropic", "claude-haiku-4-5-20251001")
+
+        prompt = f"User said: {user_text}\n\nAssistant replied: {assistant_text}\n\nExtract user facts as JSON array."
+        response = await extractor.send_message(UserMessage(text=prompt))
+
+        text = response.strip()
+        start = text.find('[')
+        end = text.rfind(']')
+        if start == -1 or end == -1:
+            return
+        arr = json.loads(text[start:end + 1])
+        if not isinstance(arr, list):
+            return
+
+        existing = await db.memories.find({"user_id": user_id}, {"_id": 0, "content": 1}).to_list(1000)
+        existing_set = {e['content'].lower().strip() for e in existing}
+
+        for fact in arr:
+            if not isinstance(fact, str):
+                continue
+            fact = fact.strip()
+            if not fact or len(fact) > 200:
+                continue
+            if fact.lower() in existing_set:
+                continue
+            mem = Memory(user_id=user_id, content=fact)
+            await db.memories.insert_one(mem.model_dump())
+            existing_set.add(fact.lower())
+    except Exception as e:
+        logger.warning(f"Memory extraction failed: {e}")
+REPLACE the whole selection with this (it now starts with a new ollama_chat helper, then the same memory extractor rewritten to call it):
+async def ollama_chat(system: str, user_text: str) -> str:
+    """Single-turn call to local Ollama. Returns the assistant's text."""
+    async with httpx.AsyncClient(timeout=180.0) as http:
+        r = await http.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={
+                "model": MODEL_NAME,
+                "stream": False,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+            },
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data.get("message", {}).get("content", "")
+
+
+async def extract_memories_async(user_id: str, user_text: str, assistant_text: str):
+    try:
+        system = (
+            "You extract durable facts about a user from a single exchange. "
+            "Return ONLY a JSON array of short fact strings (max 12 words each). "
+            "Facts must be about the USER (preferences, identity, projects, relationships, goals, habits). "
+            "Not about the assistant. Not about general topics. "
+            'If nothing worth remembering, return []. '
+            'Examples: ["Prefers concise answers", "Works as a nurse in Seattle", "Has a dog named Moss"]. '
+            "Never invent. Only extract what's stated or strongly implied."
+        )
+        prompt = f"User said: {user_text}\n\nAssistant replied: {assistant_text}\n\nExtract user facts as JSON array."
+        response = await ollama_chat(system, prompt)
+
+        text = response.strip()
+        start = text.find('[')
+        end = text.rfind(']')
+        if start == -1 or end == -1:
+            return
+        arr = json.loads(text[start:end + 1])
+        if not isinstance(arr, list):
+            return
+
+        existing = await db.memories.find({"user_id": user_id}, {"_id": 0, "content": 1}).to_list(1000)
+        existing_set = {e['content'].lower().strip() for e in existing}
+
+        for fact in arr:
+            if not isinstance(fact, str):
+                continue
+            fact = fact.strip()
+            if not fact or len(fact) > 200:
+                continue
+            if fact.lower() in existing_set:
+                continue
+            mem = Memory(user_id=user_id, content=fact)
+            await db.memories.insert_one(mem.model_dump())
+            existing_set.add(fact.lower())
+    except Exception as e:
+        logger.warning(f"Memory extraction failed: {e}")
+E — /api/chat endpoint
+FIND this whole function in backend/server.py and SELECT IT ALL:
+# Chat
 @api_router.post("/chat")
 async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
     if not EMERGENT_LLM_KEY:
@@ -400,6 +507,58 @@ async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
 
     try:
         response_text = await chat_client.send_message(UserMessage(text=req.message))
+    except Exception as e:
+        logger.error(f"LLM error: {e}")
+        raise HTTPException(500, f"LLM call failed: {str(e)}")
+
+    assistant_msg = Message(user_id=user.user_id, conversation_id=conv_id, role="assistant", content=response_text)
+    await db.messages.insert_one(assistant_msg.model_dump())
+
+    updates = {"updated_at": now_iso()}
+    if conv.get("title") == "New conversation":
+        title = req.message.strip().split("\n")[0][:60]
+        if len(req.message) > 60:
+            title += "..."
+        updates["title"] = title or "New conversation"
+    await db.conversations.update_one({"id": conv_id, "user_id": user.user_id}, {"$set": updates})
+
+    asyncio.create_task(extract_memories_async(user.user_id, req.message, response_text))
+
+    return {
+        "conversation_id": conv_id,
+        "user_message": user_msg.model_dump(),
+        "assistant_message": assistant_msg.model_dump(),
+    }
+REPLACE the whole selection with this:
+# Chat
+@api_router.post("/chat")
+async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
+    conv_id = req.conversation_id
+    if conv_id:
+        conv = await db.conversations.find_one({"id": conv_id, "user_id": user.user_id}, {"_id": 0})
+        if not conv:
+            raise HTTPException(404, "Conversation not found")
+    else:
+        conv = Conversation(user_id=user.user_id).model_dump()
+        await db.conversations.insert_one(conv)
+        conv_id = conv["id"]
+
+    user_msg = Message(user_id=user.user_id, conversation_id=conv_id, role="user", content=req.message)
+    await db.messages.insert_one(user_msg.model_dump())
+
+    history = await get_chat_history(user.user_id, conv_id)
+    system_prompt = await build_system_prompt(user)
+
+    # Fold the real prior turns into the system prompt — one LLM call per message, no replay
+    prior = [m for m in history if m["id"] != user_msg.id]
+    if prior:
+        transcript = "\n\n".join(
+            f"{'User' if m['role'] == 'user' else 'Ember'}: {m['content']}" for m in prior
+        )
+        system_prompt += f"\n\n--- This conversation so far ---\n{transcript}"
+
+    try:
+        response_text = await ollama_chat(system_prompt, req.message)
     except Exception as e:
         logger.error(f"LLM error: {e}")
         raise HTTPException(500, f"LLM call failed: {str(e)}")
