@@ -51,7 +51,8 @@ def fs_list(args: dict) -> str:
 
 def fs_glob(args: dict) -> str:
     base = Path(args.get("base", ".")).expanduser().resolve()
-    return "\n".join(sorted(str(x.relative_to(base)) for x in base.glob(args["pattern"])))
+    matches = (str(x.relative_to(base)) for x in base.glob(args["pattern"]))
+    return "\n".join(sorted(matches))
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +202,10 @@ TOOL_SCHEMAS: Dict[str, str] = {
     "py.exec":    '{"code": "<python>", "timeout": 30}',
     "web.search": '{"query": "<text>"}',
     "web.fetch":  '{"url": "<https url>"}',
-    "task.spawn": '{"role": "research|design|coding|qa|reporting|integration", "order": "<text>"}',
+    "task.spawn": (
+        '{"role": "research|design|coding|qa|reporting|integration", '
+        '"order": "<text>"}'
+    ),
 }
 
 

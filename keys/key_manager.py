@@ -98,7 +98,9 @@ def derive_all(super_key_material: bytes, run_id: Optional[str] = None) -> KeyBu
         for sk in SIDEKICKS_PER_ROLE.get(role, ()):
             agent[f"{role}:{sk}"] = _hkdf(p, info=f"agent:{role}:{sk}".encode())
 
-    b64 = lambda b: base64.b64encode(b).decode("ascii")
+    def b64(value: bytes) -> str:
+        return base64.b64encode(value).decode("ascii")
+
     return KeyBundle(
         master=b64(master),
         pseudo={k: b64(v) for k, v in pseudo.items()},
@@ -133,7 +135,13 @@ def open_vault(vault_key: bytes) -> KeyBundle:
     aes = AESGCM(vault_key)
     plaintext = aes.decrypt(nonce, ct, associated_data=b"sovereign-vault-v1")
     data = json.loads(plaintext.decode("utf-8"))
-    return KeyBundle(**data)
+    bundle_fields = {
+        "master": data["master"],
+        "pseudo": data["pseudo"],
+        "agent": data["agent"],
+        "run_id": data["run_id"],
+    }
+    return KeyBundle(**bundle_fields)
 
 
 def load_salt() -> bytes:
@@ -228,7 +236,12 @@ def audit_read(passphrase: str) -> list[str]:
         blob = base64.b64decode(line)
         nonce, ct = blob[:12], blob[12:]
         try:
-            out.append(aes.decrypt(nonce, ct, associated_data=b"sovereign-audit-v1").decode("utf-8"))
+            plaintext = aes.decrypt(
+                nonce,
+                ct,
+                associated_data=b"sovereign-audit-v1",
+            )
+            out.append(plaintext.decode("utf-8"))
         except Exception as e:  # noqa: BLE001
             out.append(f"<undecryptable entry: {e}>")
     return out

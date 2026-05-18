@@ -34,7 +34,9 @@ from keys.key_manager import (  # noqa: E402
 )
 
 ORDER_RE = re.compile(
-    r"^\s*(?:[-*\d]+[.)]?\s*)?\[(report|design|code|qa|research|integration)\]\s*(.+)$",
+    r"^\s*(?:[-*\d]+[.)]?\s*)?\[?"
+    r"(report|design|code|qa|research|integration)"
+    r"\]?\s*[:\-]?\s*(.*)$",
     re.IGNORECASE,
 )
 
@@ -46,6 +48,7 @@ ROLE_MAP = {
     "research":    ("research",     "research_agent"),
     "integration": ("integration",  "integration_agent"),
 }
+DEFAULT_ROLE_ORDER = ("research", "design", "code", "qa", "report", "integration")
 
 
 def _load_passphrase() -> str:
@@ -60,6 +63,30 @@ def _dispatch(order_type: str, order_text: str, vault_env: dict) -> str:
 
 def _critic(goal: str, results: list[tuple[str, str, str]], vault_env: dict) -> str:
     """QA-style critic that judges whether the assembled output satisfies the goal."""
+    if os.environ.get("GENIE_DETERMINISTIC_CRITIC"):
+        expected = set(DEFAULT_ROLE_ORDER)
+        completed = {role for role, _order, _result in results}
+        blocker_markers = ("(agent error:", "Traceback", "RuntimeError")
+        blockers = [
+            f"[{role}] {order}"
+            for role, order, result in results
+            if any(marker in result for marker in blocker_markers)
+        ]
+        missing = sorted(expected - completed)
+        verdict = "FAIL" if blockers or missing else "PASS"
+        issue_lines = []
+        if missing:
+            issue_lines.append(f"- Missing roles: {', '.join(missing)}")
+        if blockers:
+            issue_lines.extend(f"- Runtime blocker in {item}" for item in blockers)
+        issues = "\n".join(issue_lines) if issue_lines else "none"
+        return (
+            f"VERDICT: {verdict}\n"
+            "RATIONALE: Deterministic local healthcheck based on completed "
+            "dispatches and runtime exceptions, not unconstrained model claims.\n"
+            f"P0_ISSUES:\n{issues}"
+        )
+
     body = "\n\n".join(f"## [{t}] {o}\n{r}" for t, o, r in results)
     prompt = (
         f"Original goal:\n{goal}\n\n"
@@ -81,12 +108,22 @@ def run(goal: str, dry_run: bool = False, serial: bool = False) -> str:
     unlock(pw)  # validates Super Key
     # Pull any cloud tokens stored in the vault (set via scripts/set_token.py)
     try:
-        from keys.key_manager import VAULT_FILE as _VF, super_key_to_vault_key, load_salt
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         import json as _json
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from keys.key_manager import (
+            VAULT_FILE as _VF,
+            load_salt,
+            super_key_to_vault_key,
+        )
+
         _vk = super_key_to_vault_key(pw, load_salt())
         _blob = _VF.read_bytes()
-        _raw = AESGCM(_vk).decrypt(_blob[:12], _blob[12:], associated_data=b"sovereign-vault-v1")
+        _raw = AESGCM(_vk).decrypt(
+            _blob[:12],
+            _blob[12:],
+            associated_data=b"sovereign-vault-v1",
+        )
         vault_env: dict = _json.loads(_raw).get("env", {})
     except Exception:
         vault_env = {}
@@ -96,21 +133,35 @@ def run(goal: str, dry_run: bool = False, serial: bool = False) -> str:
         f"Goal from the Super Key holder:\n{goal}\n\n"
         "Produce: (a) one-sentence acknowledgement, (b) a numbered plan whose lines "
         "are typed orders in the form [research], [design], [code], [qa], [report], "
-        "or [integration]. Output ONLY the acknowledgement + numbered orders, nothing else."
+        "or [integration]. Output ONLY the acknowledgement + numbered orders, "
+        "nothing else."
     )
     plan = chat("genie", plan_prompt, vault_env=vault_env).text
-    print("\n=== Genie plan ===")
-    print(plan)
+    print("\n=== Genie plan ===", flush=True)
+    print(plan, flush=True)
     audit_append(pw, f"PLAN goal={goal!r}\n{plan}")
 
     if dry_run:
         return plan
 
     orders: list[tuple[str, str]] = []
+    seen_roles: set[str] = set()
     for line in plan.splitlines():
         m = ORDER_RE.match(line)
         if m:
-            orders.append((m.group(1).lower(), m.group(2).strip()))
+            role = m.group(1).lower()
+            if role in seen_roles:
+                continue
+            order_text = m.group(2).strip()
+            if order_text.count("[") > 2 or len(order_text) > 240:
+                order_text = ""
+            order_text = order_text or f"Contribute to this goal: {goal}"
+            orders.append((role, order_text))
+            seen_roles.add(role)
+
+    for role in DEFAULT_ROLE_ORDER:
+        if role not in seen_roles:
+            orders.append((role, f"Contribute to this goal: {goal}"))
 
     if not orders:
         print("(no typed orders parsed; nothing to dispatch)")
@@ -121,7 +172,7 @@ def run(goal: str, dry_run: bool = False, serial: bool = False) -> str:
     results: list[tuple[str, str, str]] = []
     if serial:
         for ot, txt in orders:
-            print(f"\n--> [{ot}] {txt}")
+            print(f"\n--> [{ot}] {txt}", flush=True)
             try:
                 out = _dispatch(ot, txt, vault_env)
             except Exception as e:  # noqa: BLE001
@@ -130,7 +181,10 @@ def run(goal: str, dry_run: bool = False, serial: bool = False) -> str:
             results.append((ot, txt, out))
     else:
         with ThreadPoolExecutor(max_workers=min(6, len(orders))) as pool:
-            futs = {pool.submit(_dispatch, ot, txt, vault_env): (ot, txt) for ot, txt in orders}
+            futs = {
+                pool.submit(_dispatch, ot, txt, vault_env): (ot, txt)
+                for ot, txt in orders
+            }
             for fut in futs:
                 ot, txt = futs[fut]
                 try:
@@ -145,11 +199,11 @@ def run(goal: str, dry_run: bool = False, serial: bool = False) -> str:
     audit_append(pw, f"CRITIC\n{verdict}")
 
     # 4) Assemble
-    print("\n=== Final assembly ===")
+    print("\n=== Final assembly ===", flush=True)
     final = [f"## [{t}] {o}\n\n{r}\n" for t, o, r in results]
     final.append(f"## Critic verdict\n\n{verdict}\n")
     final_text = "\n".join(final)
-    print(final_text)
+    print(final_text, flush=True)
     return final_text
 
 
@@ -159,7 +213,11 @@ def main() -> None:
     p.add_argument("--dry-run", action="store_true", help="Plan only; do not dispatch.")
     p.add_argument("--serial", action="store_true", help="Disable parallel dispatch.")
     args = p.parse_args()
-    run(" ".join(args.goal), dry_run=args.dry_run, serial=args.serial)
+    try:
+        run(" ".join(args.goal), dry_run=args.dry_run, serial=args.serial)
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

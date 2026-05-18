@@ -1,7 +1,6 @@
 """Unit tests for the key hierarchy and tool registry. Run: `pytest -q`."""
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -47,6 +46,39 @@ def test_full_key_lifecycle(tmp_path, monkeypatch):
     assert len(entries) == 2
     assert "first entry" in entries[0]
     assert "second entry" in entries[1]
+
+
+def test_vault_loader_tolerates_env_tokens(tmp_path, monkeypatch):
+    import json
+    import secrets
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    import keys.key_manager as km
+
+    monkeypatch.setattr(km, "VAULT_DIR", tmp_path)
+    monkeypatch.setattr(km, "VAULT_FILE", tmp_path / "keys.enc")
+    monkeypatch.setattr(km, "SALT_FILE", tmp_path / "salt.bin")
+    monkeypatch.setattr(km, "META_FILE", tmp_path / "meta.json")
+
+    salt = secrets.token_bytes(16)
+    km.write_salt(salt)
+    pw = "test-passphrase-1234567890"
+    vault_key = km.super_key_to_vault_key(pw, salt)
+    bundle = km.derive_all(vault_key)
+
+    raw = bundle.to_dict()
+    raw["env"] = {"GEMINI_API_KEY": "secret"}
+    nonce = secrets.token_bytes(12)
+    encrypted = AESGCM(vault_key).encrypt(
+        nonce,
+        json.dumps(raw).encode("utf-8"),
+        associated_data=b"sovereign-vault-v1",
+    )
+    km.VAULT_FILE.write_bytes(nonce + encrypted)
+
+    opened = km.unlock(pw)
+    assert opened.master == bundle.master
 
 
 def test_tool_registry_basic(tmp_path):

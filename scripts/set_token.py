@@ -12,7 +12,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import base64
 import getpass
 import json
 import os
@@ -27,7 +26,6 @@ from keys.key_manager import (  # noqa: E402
     VAULT_FILE,
     load_salt,
     open_vault,
-    seal_vault,
     super_key_to_vault_key,
 )
 
@@ -47,10 +45,9 @@ def main() -> None:
     bundle = open_vault(vault_key)
 
     # We store the token by re-sealing the vault with an extra "env" map.
-    data = bundle.to_dict()
-    env = data.setdefault("env", {}) if isinstance(data, dict) else {}
     # `to_dict` returns asdict(KeyBundle) which doesn't include `env`; carry separately.
     raw = json.loads(_decrypt_raw(vault_key))
+    raw.update(bundle.to_dict())
     raw.setdefault("env", {})[args.name] = token
     _encrypt_raw(vault_key, json.dumps(raw).encode("utf-8"))
     print(f"Stored {args.name} in the encrypted vault.")
@@ -64,7 +61,11 @@ def _decrypt_raw(vault_key: bytes) -> bytes:
 
 def _encrypt_raw(vault_key: bytes, plaintext: bytes) -> None:
     nonce = secrets.token_bytes(12)
-    ct = AESGCM(vault_key).encrypt(nonce, plaintext, associated_data=b"sovereign-vault-v1")
+    ct = AESGCM(vault_key).encrypt(
+        nonce,
+        plaintext,
+        associated_data=b"sovereign-vault-v1",
+    )
     VAULT_FILE.write_bytes(nonce + ct)
 
 

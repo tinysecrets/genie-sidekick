@@ -37,12 +37,16 @@ def _load_yaml(p: Path) -> dict:
 
 def _ollama_chat(model: str, system: str, user: str, temperature: float) -> str:
     host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+    num_predict = int(os.environ.get("OLLAMA_NUM_PREDICT", "256"))
     r = requests.post(
         f"{host}/api/chat",
         json={
             "model": model,
             "stream": False,
-            "options": {"temperature": temperature},
+            "options": {
+                "temperature": temperature,
+                "num_predict": num_predict,
+            },
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -54,7 +58,13 @@ def _ollama_chat(model: str, system: str, user: str, temperature: float) -> str:
     return r.json()["message"]["content"]
 
 
-def _groq_chat(model: str, system: str, user: str, temperature: float, token: str) -> str:
+def _groq_chat(
+    model: str,
+    system: str,
+    user: str,
+    temperature: float,
+    token: str,
+) -> str:
     r = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {token}"},
@@ -86,8 +96,14 @@ def _hf_chat(model: str, system: str, user: str, token: str) -> str:
     return json.dumps(data)
 
 
-def _gemini_chat(model: str, system: str, user: str, temperature: float, token: str) -> str:
-    """Google AI Studio (Gemini) — free tier. https://aistudio.google.com/"""
+def _gemini_chat(
+    model: str,
+    system: str,
+    user: str,
+    temperature: float,
+    token: str,
+) -> str:
+    """Google AI Studio (Gemini) free tier."""
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model}:generateContent?key={token}"
@@ -108,7 +124,7 @@ def _gemini_chat(model: str, system: str, user: str, temperature: float, token: 
 
 def chat(role: str, user: str, vault_env: Optional[dict] = None) -> LLMResponse:
     """
-    `role` is a key in agents.yaml (genie | reporting | design | coding | qa | sidekick).
+    `role` is a key in agents.yaml.
     `vault_env` is an optional dict of decrypted env values (e.g. GROQ_API_KEY).
     """
     models = _load_yaml(MODELS_CFG)
@@ -139,11 +155,21 @@ def chat(role: str, user: str, vault_env: Optional[dict] = None) -> LLMResponse:
 
     if backend == "ollama":
         entry = models["ollama"][model_key]
-        return LLMResponse(
-            text=_ollama_chat(entry["model"], system_prompt, user, entry["temperature"]),
-            backend="ollama",
-            model=entry["model"],
-        )
+        try:
+            text = _ollama_chat(
+                entry["model"],
+                system_prompt,
+                user,
+                entry["temperature"],
+            )
+        except requests.RequestException as exc:
+            raise RuntimeError(
+                "Ollama is the default backend, but it is not reachable at "
+                f"{os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')}. "
+                "Start Ollama and pull the configured models, or store a free "
+                "cloud token with scripts/set_token.py."
+            ) from exc
+        return LLMResponse(text=text, backend="ollama", model=entry["model"])
     if backend == "gemini":
         m = models["gemini"]["models"]["fast"]
         return LLMResponse(

@@ -22,7 +22,9 @@ from agents._llm import chat  # noqa: E402
 SIDEKICK_PROMPTS = {
     "reporting:notifier":  "Turn the report into a 280-char status ping. No emojis.",
     "reporting:digest":    "Roll up multi-day reports into a single 5-bullet brief.",
-    "design:moodboard":    "Describe (do not generate) 6 reference images with style notes.",
+    "design:moodboard":    (
+        "Describe (do not generate) 6 reference images with style notes."
+    ),
     "design:palette":      "Output a 5-stop hex palette with WCAG contrast notes.",
     "coding:scaffolder":   "Output a folder tree + empty file list. No code.",
     "coding:refactor":     "Propose a narrow refactor as a unified diff sketch.",
