@@ -1,0 +1,5 @@
+/* App-level styles. Base theme lives in index.css */
+.App {
+    position: relative;
+    z-index: 2;
+}
