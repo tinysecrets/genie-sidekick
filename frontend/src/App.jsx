@@ -1,203 +1,136 @@
-import React, { useEffect, useRef, useState } from 'react'
-import * as api from './api'
+import React, { useState } from 'react'
+
+const workers = [
+  { name: 'Repo Builder', status: 'Ready', detail: 'Project setup and file organization.' },
+  { name: 'UI Designer', status: 'Ready', detail: 'Dashboard screens and app layout.' },
+  { name: 'Backend Builder', status: 'Ready', detail: 'API and local service structure.' },
+  { name: 'Quality Check', status: 'Active', detail: 'Checks install, run, and release steps.' },
+]
+
+const projects = [
+  { name: 'Genie Command Center', status: 'Running' },
+  { name: 'Team Workspace', status: 'Ready' },
+  { name: 'Voice Mode', status: 'Next' },
+  { name: 'Desktop App Wrapper', status: 'Next' },
+]
 
 export default function App() {
-  const [authed, setAuthed] = useState(api.isLoggedIn())
+  const [tab, setTab] = useState('Home')
+  const [items, setItems] = useState(['Genie dashboard started.', 'Local app shell is running.', 'Workspace panels loaded.'])
+  const [text, setText] = useState('')
 
-  if (!authed) return <Login onSuccess={() => setAuthed(true)} />
-  return <Chat onLogout={() => { api.logout(); setAuthed(false) }} />
-}
-
-function Login({ onSuccess }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [err, setErr] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  async function submit(e) {
+  function submit(e) {
     e.preventDefault()
-    setErr(''); setBusy(true)
-    try {
-      await api.login(email, password)
-      onSuccess()
-    } catch (e) {
-      setErr(e.message || 'Login failed')
-    } finally {
-      setBusy(false)
-    }
+    if (!text.trim()) return
+    setItems([`Mission: ${text.trim()}`, 'Genie: Received. I am organizing the next build step.', ...items])
+    setText('')
   }
 
   return (
-    <div className="login-shell" data-testid="login-shell">
-      <form className="login-card" onSubmit={submit}>
-        <div className="lamp">🪔</div>
-        <h1>Genie</h1>
-        <p className="sub">Your personal sidekick.</p>
-        <input
-          data-testid="login-email"
-          type="email" placeholder="email" autoComplete="username"
-          value={email} onChange={e => setEmail(e.target.value)} required
-        />
-        <input
-          data-testid="login-password"
-          type="password" placeholder="password" autoComplete="current-password"
-          value={password} onChange={e => setPassword(e.target.value)} required
-        />
-        {err && <div className="err" data-testid="login-error">{err}</div>}
-        <button data-testid="login-submit" disabled={busy} type="submit">
-          {busy ? 'Rubbing the lamp…' : 'Enter'}
-        </button>
-      </form>
-    </div>
-  )
-}
-
-function Chat({ onLogout }) {
-  const [providers, setProviders] = useState([])
-  const [provider, setProvider] = useState('')
-  const [sessions, setSessions] = useState([])
-  const [sessionId, setSessionId] = useState('')
-  const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  const scrollRef = useRef(null)
-
-  // initial load
-  useEffect(() => {
-    (async () => {
-      try {
-        const p = await api.listProviders()
-        setProviders(p.providers || [])
-        setProvider(p.default || '')
-        const s = await api.listSessions()
-        setSessions(s)
-        if (s.length) await openSession(s[0].session_id)
-        else await startNew()
-      } catch (e) {
-        setErr(e.message)
-        if (/auth|forbidden|401|403/i.test(e.message)) onLogout()
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages])
-
-  async function openSession(id) {
-    setSessionId(id); setMessages([]); setErr('')
-    try {
-      const h = await api.loadHistory(id)
-      setMessages(h.messages || [])
-    } catch (e) { setErr(e.message) }
-  }
-
-  async function startNew() {
-    try {
-      const r = await api.newSession()
-      setSessionId(r.session_id); setMessages([])
-    } catch (e) { setErr(e.message) }
-  }
-
-  async function send(e) {
-    e?.preventDefault?.()
-    const msg = input.trim()
-    if (!msg || busy) return
-    setInput(''); setBusy(true); setErr('')
-    setMessages(m => [...m, { role: 'user', content: msg, at: new Date().toISOString() }])
-    try {
-      const r = await api.chat(msg, sessionId, provider)
-      if (r.session_id && r.session_id !== sessionId) setSessionId(r.session_id)
-      setMessages(m => [...m, { role: 'assistant', content: r.reply, at: new Date().toISOString(), provider: r.provider }])
-      // refresh sidebar
-      api.listSessions().then(setSessions).catch(() => {})
-    } catch (e) {
-      setErr(e.message)
-      setMessages(m => [...m, { role: 'assistant', content: `⚠️ ${e.message}`, at: new Date().toISOString(), error: true }])
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="chat-shell" data-testid="chat-shell">
+    <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="lamp">🪔</span>
-          <span>Genie</span>
+          <div className="logo">G</div>
+          <div>
+            <h1>GENIE</h1>
+            <p>Command Center</p>
+          </div>
         </div>
-        <button className="new-btn" data-testid="new-session-btn" onClick={startNew}>+ New chat</button>
-        <div className="sessions">
-          {sessions.map(s => (
-            <button
-              key={s.session_id}
-              data-testid={`session-${s.session_id}`}
-              className={`session ${s.session_id === sessionId ? 'active' : ''}`}
-              onClick={() => openSession(s.session_id)}
-              title={s.preview}
-            >
-              <div className="prev">{s.preview || 'New chat'}</div>
-              <div className="meta">{s.message_count} msg</div>
-            </button>
-          ))}
-          {!sessions.length && <div className="empty">No chats yet.</div>}
-        </div>
-        <div className="footer">
-          <select
-            data-testid="provider-select"
-            value={provider}
-            onChange={e => setProvider(e.target.value)}
-            title="Switch brain"
-          >
-            {providers.map(p => (
-              <option key={p.id} value={p.id} disabled={!p.enabled}>
-                {p.emoji} {p.label}{p.enabled ? '' : ' (off)'}
-              </option>
-            ))}
-          </select>
-          <button className="logout" data-testid="logout-btn" onClick={onLogout}>Logout</button>
+
+        {['Home', 'Team', 'Projects', 'Voice', 'Settings'].map(name => (
+          <button key={name} className={tab === name ? 'nav active' : 'nav'} onClick={() => setTab(name)}>
+            {name}
+          </button>
+        ))}
+
+        <div className="runtime-card">
+          <span>Runtime</span>
+          <strong>Local First</strong>
+          <p>Desktop and mobile friendly app foundation.</p>
         </div>
       </aside>
 
       <main className="main">
-        <div className="messages" ref={scrollRef}>
-          {messages.length === 0 && (
-            <div className="welcome">
-              <div className="lamp big">🪔</div>
-              <p>Ask me anything, Boss.</p>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={`msg ${m.role}${m.error ? ' err' : ''}`} data-testid={`msg-${m.role}-${i}`}>
-              <div className="bubble">{m.content}</div>
-            </div>
-          ))}
-          {busy && (
-            <div className="msg assistant" data-testid="msg-typing">
-              <div className="bubble typing"><span/><span/><span/></div>
-            </div>
-          )}
-        </div>
+        <header className="header">
+          <div>
+            <span className="eyebrow">xgraphicalx interface online</span>
+            <h2>{tab}</h2>
+          </div>
+          <div className="status"><i /> LIVE</div>
+        </header>
 
-        {err && <div className="banner-err" data-testid="chat-error">{err}</div>}
+        <section className="cards">
+          <div><span>Status</span><strong>Alive</strong></div>
+          <div><span>Mode</span><strong>Local</strong></div>
+          <div><span>Workers</span><strong>{workers.length}</strong></div>
+          <div><span>Build</span><strong>Dashboard</strong></div>
+        </section>
 
-        <form className="composer" onSubmit={send}>
-          <textarea
-            data-testid="composer-input"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
-            }}
-            placeholder="Talk to Genie… (Enter to send, Shift+Enter for newline)"
-            rows={1}
-          />
-          <button data-testid="send-btn" type="submit" disabled={busy || !input.trim()}>
-            Send
-          </button>
-        </form>
+        {tab === 'Home' && (
+          <div className="grid two">
+            <section className="hero">
+              <div className="orb">✦</div>
+              <h3>Welcome back, Justin.</h3>
+              <p>Genie is online as your main command screen. Use this page as the app foundation and keep building from here.</p>
+              <form onSubmit={submit} className="command">
+                <input value={text} onChange={e => setText(e.target.value)} placeholder="Tell Genie what to build next..." />
+                <button>Send</button>
+              </form>
+            </section>
+
+            <section className="panel">
+              <h3>Live Feed</h3>
+              <div className="feed">
+                {items.map((item, index) => <div key={index}>{item}</div>)}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'Team' && (
+          <section className="panel">
+            <h3>Team Workspace</h3>
+            <div className="worker-grid">
+              {workers.map(worker => (
+                <article key={worker.name} className="worker">
+                  <div><h4>{worker.name}</h4><span>{worker.status}</span></div>
+                  <p>{worker.detail}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'Projects' && (
+          <section className="panel">
+            <h3>Projects</h3>
+            <div className="project-list">
+              {projects.map(project => (
+                <div key={project.name} className="project"><strong>{project.name}</strong><span>{project.status}</span></div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'Voice' && (
+          <section className="panel voice">
+            <div className="voice-orb">◉</div>
+            <h3>Live Voice Mode</h3>
+            <p>Interface prepared. Next step connects microphone input and spoken responses.</p>
+            <button className="primary">Prepare Voice</button>
+          </section>
+        )}
+
+        {tab === 'Settings' && (
+          <section className="panel">
+            <h3>Settings</h3>
+            <div className="settings">
+              <div><strong>Theme</strong><span>xgraphicalx dark command center</span></div>
+              <div><strong>App Type</strong><span>Vite React frontend</span></div>
+              <div><strong>Launch</strong><span>npm run dev</span></div>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   )
