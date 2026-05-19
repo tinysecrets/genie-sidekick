@@ -1,0 +1,8 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+.local/
+
+# Local encrypted runtime state. Recreate with bootstrap.sh.
+keys/vault/

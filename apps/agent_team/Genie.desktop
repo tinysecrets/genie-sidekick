@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Genie
+Comment=Open the local Genie creation environment
+Exec=/workspaces/agent-team/scripts/start_genie_app.sh
+Icon=applications-development
+Terminal=false
+Categories=Development;Utility;

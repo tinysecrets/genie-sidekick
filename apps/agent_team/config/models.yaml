@@ -1,0 +1,53 @@
+# config/models.yaml
+# Free, locally-runnable models - Ollama default. Cloud free tiers are opt-in.
+
+default_backend: ollama
+
+ollama:
+  genie:
+    model: qwen2.5:1.5b
+    temperature: 0.4
+  coding:
+    model: qwen2.5:1.5b
+    temperature: 0.2
+  design:
+    model: qwen2.5:1.5b
+    temperature: 0.7
+  reporting:
+    model: qwen2.5:1.5b
+    temperature: 0.3
+  qa:
+    model: qwen2.5:1.5b
+    temperature: 0.2
+  research:
+    model: qwen2.5:1.5b
+    temperature: 0.3
+  integration:
+    model: qwen2.5:1.5b
+    temperature: 0.2
+  sidekick:
+    model: qwen2.5:1.5b
+    temperature: 0.5
+
+groq:
+  enabled_if_token: GROQ_API_KEY
+  base_url: https://api.groq.com/openai/v1
+  models:
+    fast: llama-3.1-8b-instant
+    strong: llama-3.3-70b-versatile
+
+gemini:
+  # Google AI Studio free tier.
+  # Get a key at https://aistudio.google.com/app/apikey
+  enabled_if_token: GEMINI_API_KEY
+  base_url: https://generativelanguage.googleapis.com/v1beta
+  models:
+    fast: gemini-2.5-flash
+    strong: gemini-2.5-pro
+
+huggingface:
+  enabled_if_token: HF_TOKEN
+  base_url: https://api-inference.huggingface.co
+  models:
+    fast: meta-llama/Llama-3.2-3B-Instruct
+    strong: Qwen/Qwen2.5-7B-Instruct
