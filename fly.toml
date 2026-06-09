@@ -1,32 +1,38 @@
-app = "genie-sidekick"
-primary_region = "iad"
-kill_signal = "SIGTERM"
-kill_timeout = 30
+# fly.toml app configuration file generated for genie-sidekick on 2026-06-09T08:16:10Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'genie-sidekick'
+primary_region = 'iad'
+kill_signal = 'SIGTERM'
+kill_timeout = '30s'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  PORT = "8000"
-  PYTHONUNBUFFERED = "1"
+  PORT = '8000'
+  PYTHONUNBUFFERED = '1'
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
   [[http_service.checks]]
-    grace_period = "15s"
-    interval = "20s"
-    method = "GET"
-    timeout = "5s"
-    path = "/api/health"
+    interval = '20s'
+    timeout = '5s'
+    grace_period = '15s'
+    method = 'GET'
+    path = '/api/health'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
-  cpu_kind = "shared"
+  memory_mb = 512
