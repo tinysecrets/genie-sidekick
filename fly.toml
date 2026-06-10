@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for genie-sidekick on 2026-06-09T08:16:10Z
+# fly.toml app configuration file generated for realwah-lah-com-sfupba on 2026-06-10T11:50:14Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'genie-sidekick'
+app = 'realwah-lah-com-sfupba'
 primary_region = 'iad'
 kill_signal = 'SIGTERM'
 kill_timeout = '30s'
