@@ -1,15 +1,15 @@
-# fly.toml app configuration file generated for realwah-lah-com-sfupba on 2026-06-10T11:50:14Z
+# fly.toml app configuration file generated for realwah-lah.com on 2026-06-10T11:50:14Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'realwah-lah-com-sfupba'
+app = 'realwah-lah.com'
 primary_region = 'iad'
 kill_signal = 'SIGTERM'
 kill_timeout = '30s'
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = 'dockerfile'
 
 [env]
   PORT = '8000'
