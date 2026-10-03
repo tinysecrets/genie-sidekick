@@ -31,9 +31,13 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')  # kept for backwards compat, unused with Ollama
+OPENROUTER_URL = os.environ.get("OPENROUTER_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "cognitivecomputations/dolphin-mistral-24b-venice-edition:free")
+OPENROUTER_FALLBACK_MODEL = os.environ.get("OPENROUTER_FALLBACK_MODEL", "openrouter/free")
+
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
-MODEL_NAME = os.environ.get('OLLAMA_MODEL', 'dolphin3')
+MODEL_NAME = os.environ.get('OLLAMA_MODEL', 'hermes3:8b')
 
 EMERGENT_AUTH_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 SESSION_DAYS = 7
@@ -176,24 +180,46 @@ async def get_chat_history(user_id: str, conversation_id: str) -> List[dict]:
     return msgs
 
 
-async def ollama_chat(system: str, user_text: str) -> str:
-    """Single-turn call to local Ollama. Returns the assistant's text."""
-    async with httpx.AsyncClient(timeout=180.0) as http:
-        r = await http.post(
-            f"{OLLAMA_URL}/api/chat",
-            json={
-                "model": MODEL_NAME,
-                "stream": False,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_text},
-                ],
-            },
-        )
+async def openrouter_chat(system: str, user_text: str, model: Optional[str] = None) -> str:
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is not available to Ember")
+    chosen = model or OPENROUTER_MODEL
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "X-Title": "Ember",
+        "HTTP-Referer": "http://127.0.0.1:3001",
+    }
+    payload = {"model": chosen, "stream": False, "messages": [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_text},
+    ]}
+    async with httpx.AsyncClient(timeout=120.0) as http:
+        r = await http.post(f"{OPENROUTER_URL}/chat/completions", headers=headers, json=payload)
+        if r.status_code >= 400 and chosen != OPENROUTER_FALLBACK_MODEL:
+            payload["model"] = OPENROUTER_FALLBACK_MODEL
+            r = await http.post(f"{OPENROUTER_URL}/chat/completions", headers=headers, json=payload)
         r.raise_for_status()
         data = r.json()
-        return data.get("message", {}).get("content", "")
+        return (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
 
+
+async def ollama_chat(system: str, user_text: str) -> str:
+    async with httpx.AsyncClient(timeout=180.0) as http:
+        r = await http.post(f"{OLLAMA_URL}/api/chat", json={
+            "model": MODEL_NAME, "stream": False,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_text}],
+        })
+        r.raise_for_status()
+        return r.json().get("message", {}).get("content", "")
+
+
+async def llm_chat(system: str, user_text: str) -> str:
+    try:
+        return await openrouter_chat(system, user_text)
+    except Exception as cloud_error:
+        logger.warning("OpenRouter unavailable: %s; using local fallback", cloud_error)
+        return await ollama_chat(system, user_text)
 
 async def extract_memories_async(user_id: str, user_text: str, assistant_text: str):
     try:
@@ -207,7 +233,7 @@ async def extract_memories_async(user_id: str, user_text: str, assistant_text: s
             "Never invent. Only extract what's stated or strongly implied."
         )
         prompt = f"User said: {user_text}\n\nAssistant replied: {assistant_text}\n\nExtract user facts as JSON array."
-        response = await ollama_chat(system, prompt)
+        response = await llm_chat(system, prompt)
 
         text = response.strip()
         start = text.find('[')
@@ -497,7 +523,7 @@ async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
         system_prompt += f"\n\n--- This conversation so far ---\n{transcript}"
 
     try:
-        response_text = await ollama_chat(system_prompt, req.message)
+        response_text = await llm_chat(system_prompt, req.message)
     except Exception as e:
         logger.error(f"LLM error: {e}")
         raise HTTPException(500, f"LLM call failed: {str(e)}")
