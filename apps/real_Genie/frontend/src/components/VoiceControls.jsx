@@ -71,7 +71,12 @@ export default function VoiceControls({ onSend, disabled, onVoiceModeChange }) {
   const startRecording = useCallback(async () => {
     if (disabled || recording) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Prefer the routed LG G8 microphone explicitly. Chrome exposes it alongside the generic "Default" input.
+      const inputs = await navigator.mediaDevices.enumerateDevices();
+      const g8 = inputs.find((d) => d.kind === "audioinput" && /android-87f1610|lg\s*g8|g8/i.test(d.label));
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: g8 ? { deviceId: { exact: g8.deviceId }, channelCount: 1 } : true,
+      });
       const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";
