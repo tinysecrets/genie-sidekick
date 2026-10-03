@@ -16,6 +16,8 @@ import re
 import json
 import uuid
 import logging
+import socket
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
@@ -139,6 +141,14 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     provider: Optional[str] = None
+
+
+class LiveEventRequest(BaseModel):
+    action: str = "Action"
+    target: Optional[str] = None
+    detail: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
 
 
 # ---------- providers ----------
@@ -380,6 +390,133 @@ async def sessions(user=Depends(get_current_user)):
 @genie_router.post("/new-session")
 async def new_session(_user=Depends(get_current_user)):
     return {"session_id": str(uuid.uuid4())}
+
+
+# ---------- live command-center ----------
+DEFAULT_SITE_META = {
+    3000: ("Web App", "Local Apps", "◫"),
+    3001: ("Web App 3001", "Local Apps", "◫"),
+    4173: ("Vite Preview", "Local Apps", "◇"),
+    5173: ("Vite Dev", "Local Apps", "◇"),
+    8080: ("Local Web", "Local Apps", "□"),
+    8765: ("Agent-S Worker", "Agents", "✦"),
+    8766: ("Voice Bridge", "Agents", "◉"),
+    8799: ("D-A-I Headquarters", "DAI", "◆"),
+    11435: ("Model Router", "DAI", "◎"),
+}
+
+LIVE_EVENTS: List[Dict[str, Any]] = []
+LIVE_EVENT_LIMIT = 250
+
+
+def _allowed_local_url(url: str) -> bool:
+    return url.startswith("http://127.0.0.1:") or url.startswith("http://localhost:")
+
+
+def _probe_http(url: str) -> Dict[str, Any]:
+    try:
+        req = urllib.request.Request(url + "/", headers={"User-Agent": "GenieSiteProbe/1.0"})
+        with urllib.request.urlopen(req, timeout=0.8) as response:
+            body = response.read(8192).decode("utf-8", errors="ignore")
+            match = re.search(r"<title[^>]*>(.*?)</title>", body, re.IGNORECASE | re.DOTALL)
+            title = re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+            return {"up": True, "http": True, "status": getattr(response, "status", 200), "title": title}
+    except Exception as exc:
+        return {"up": False, "http": False, "error": str(exc)[:120]}
+
+
+def _probe_tcp(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def _site_candidates() -> List[Dict[str, Any]]:
+    candidates: List[Dict[str, Any]] = []
+    raw = os.environ.get("GENIE_SITES_JSON", "").strip()
+    if raw:
+        try:
+            configured = json.loads(raw)
+            if isinstance(configured, list):
+                for item in configured:
+                    if not isinstance(item, dict):
+                        continue
+                    url = str(item.get("url", "")).strip()
+                    if not _allowed_local_url(url):
+                        continue
+                    candidates.append({
+                        "id": str(item.get("id") or url),
+                        "label": str(item.get("label") or url),
+                        "url": url.rstrip("/"),
+                        "group": str(item.get("group") or "Custom"),
+                        "icon": str(item.get("icon") or "◈"),
+                    })
+        except json.JSONDecodeError:
+            logger.warning("GENIE_SITES_JSON is invalid; using default local sites.")
+
+    ports_raw = os.environ.get("GENIE_SITE_PORTS", "3000,3001,4173,5173,8080,8765,8766,8799,11435")
+    for value in ports_raw.split(","):
+        try:
+            port = int(value.strip())
+        except ValueError:
+            continue
+        if port <= 0 or port > 65535 or port in {8000, int(os.environ.get("PORT", "8000"))}:
+            continue
+        label, group, icon = DEFAULT_SITE_META.get(port, (f"Localhost {port}", "Local Apps", "◈"))
+        candidates.append({
+            "id": f"localhost-{port}",
+            "label": label,
+            "url": f"http://127.0.0.1:{port}",
+            "port": port,
+            "group": group,
+            "icon": icon,
+        })
+
+    deduped = {}
+    for site in candidates:
+        deduped[site["url"]] = site
+    return list(deduped.values())
+
+
+@genie_router.get("/sites")
+async def local_sites(user=Depends(get_current_user)):
+    sites = []
+    for site in _site_candidates():
+        url = site["url"]
+        port = site.get("port")
+        probe = _probe_http(url)
+        if not probe["up"] and port:
+            if _probe_tcp("127.0.0.1", port):
+                probe = {"up": True, "http": False, "error": "TCP service is reachable but did not expose an HTTP page."}
+        item = {**site, **probe}
+        if item.get("title") and item["label"].startswith("Localhost"):
+            item["label"] = item["title"]
+        sites.append(item)
+    return {"sites": sites, "checked_at": datetime.now(timezone.utc).isoformat()}
+
+
+@genie_router.get("/live/events")
+async def live_events(user=Depends(get_current_user)):
+    return {"events": LIVE_EVENTS[-100:]}
+
+
+@genie_router.post("/live/events")
+async def add_live_event(req: LiveEventRequest, user=Depends(get_current_user)):
+    event = {
+        "id": str(uuid.uuid4()),
+        "action": req.action.strip()[:80] or "Action",
+        "target": (req.target or "").strip()[:180] or None,
+        "detail": (req.detail or "").strip()[:240] or None,
+        "x": req.x,
+        "y": req.y,
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    LIVE_EVENTS.append(event)
+    if len(LIVE_EVENTS) > LIVE_EVENT_LIMIT:
+        del LIVE_EVENTS[:-LIVE_EVENT_LIMIT]
+    return event
 
 
 # ---------- health ----------

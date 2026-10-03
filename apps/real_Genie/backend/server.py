@@ -235,7 +235,7 @@ async def extract_memories_async(user_id: str, user_text: str, assistant_text: s
 
 # ---------- Auth Routes ----------
 @api_router.post("/auth/session")
-async def auth_session(body: SessionExchangeRequest, response: Response):
+async def auth_session(body: SessionExchangeRequest, request: Request, response: Response):
     """Exchange Emergent session_id for our session_token cookie."""
     async with httpx.AsyncClient(timeout=15.0) as http:
         try:
@@ -286,8 +286,8 @@ async def auth_session(body: SessionExchangeRequest, response: Response):
         value=session_token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=request.url.scheme == "https",
+        samesite="none" if request.url.scheme == "https" else "lax",
         path="/",
     )
 
@@ -307,7 +307,7 @@ async def auth_logout(request: Request, response: Response, authorization: Optio
         token = authorization.split(" ", 1)[1].strip()
     if token:
         await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    response.delete_cookie("session_token", path="/", samesite="none" if request.url.scheme == "https" else "lax", secure=request.url.scheme == "https")
     return {"ok": True}
 
 
@@ -365,7 +365,6 @@ async def get_messages(conv_id: str, user: User = Depends(get_user_from_request)
 
 
 # Chat
-FIND this whole function in backend/server.py and SELECT IT ALL:
 async def extract_memories_async(user_id: str, user_text: str, assistant_text: str):
     try:
         extractor = LlmChat(
@@ -410,7 +409,6 @@ async def extract_memories_async(user_id: str, user_text: str, assistant_text: s
             existing_set.add(fact.lower())
     except Exception as e:
         logger.warning(f"Memory extraction failed: {e}")
-REPLACE the whole selection with this (it now starts with a new ollama_chat helper, then the same memory extractor rewritten to call it):
 async def ollama_chat(system: str, user_text: str) -> str:
     """Single-turn call to local Ollama. Returns the assistant's text."""
     async with httpx.AsyncClient(timeout=180.0) as http:
@@ -469,9 +467,6 @@ async def extract_memories_async(user_id: str, user_text: str, assistant_text: s
             existing_set.add(fact.lower())
     except Exception as e:
         logger.warning(f"Memory extraction failed: {e}")
-E — /api/chat endpoint
-FIND this whole function in backend/server.py and SELECT IT ALL:
-# Chat
 @api_router.post("/chat")
 async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
     if not EMERGENT_LLM_KEY:
@@ -529,7 +524,6 @@ async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
         "user_message": user_msg.model_dump(),
         "assistant_message": assistant_msg.model_dump(),
     }
-REPLACE the whole selection with this:
 # Chat
 @api_router.post("/chat")
 async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):

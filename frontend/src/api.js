@@ -4,19 +4,19 @@ const TOKEN_KEY = 'genie_token'
 const token = () => localStorage.getItem(TOKEN_KEY) || ''
 const headers = () => ({
   'Content-Type': 'application/json',
-  ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+  ...(token() ? { Authorization: 'Bearer ' + token() } : {}),
 })
 
 async function jsonOrThrow(r) {
   const text = await r.text()
   let body = {}
   try { body = text ? JSON.parse(text) : {} } catch { body = { detail: text } }
-  if (!r.ok) throw new Error(body.detail || `${r.status} ${r.statusText}`)
+  if (!r.ok) throw new Error(body.detail || (r.status + ' ' + r.statusText))
   return body
 }
 
 export async function login(email, password) {
-  const r = await fetch(`${API}/api/auth/login`, {
+  const r = await fetch(API + '/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -30,11 +30,11 @@ export const logout = () => localStorage.removeItem(TOKEN_KEY)
 export const isLoggedIn = () => !!token()
 
 export async function listProviders() {
-  return jsonOrThrow(await fetch(`${API}/api/genie/providers`, { headers: headers() }))
+  return jsonOrThrow(await fetch(API + '/api/genie/providers', { headers: headers() }))
 }
 
 export async function chat(message, sessionId, provider) {
-  return jsonOrThrow(await fetch(`${API}/api/genie/chat`, {
+  return jsonOrThrow(await fetch(API + '/api/genie/chat', {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ message, session_id: sessionId, provider }),
@@ -42,13 +42,29 @@ export async function chat(message, sessionId, provider) {
 }
 
 export async function listSessions() {
-  return jsonOrThrow(await fetch(`${API}/api/genie/sessions`, { headers: headers() }))
+  return jsonOrThrow(await fetch(API + '/api/genie/sessions', { headers: headers() }))
 }
 
 export async function loadHistory(sessionId) {
-  return jsonOrThrow(await fetch(`${API}/api/genie/history/${sessionId}`, { headers: headers() }))
+  return jsonOrThrow(await fetch(API + '/api/genie/history/' + sessionId, { headers: headers() }))
 }
 
 export async function newSession() {
-  return jsonOrThrow(await fetch(`${API}/api/genie/new-session`, { method: 'POST', headers: headers() }))
+  return jsonOrThrow(await fetch(API + '/api/genie/new-session', { method: 'POST', headers: headers() }))
+}
+
+export async function listSites() {
+  return jsonOrThrow(await fetch(API + '/api/genie/sites', { headers: headers() }))
+}
+
+export async function listLiveEvents() {
+  return jsonOrThrow(await fetch(API + '/api/genie/live/events', { headers: headers() }))
+}
+
+export async function reportLiveEvent(event) {
+  return jsonOrThrow(await fetch(API + '/api/genie/live/events', {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(event),
+  }))
 }
