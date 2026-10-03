@@ -705,6 +705,45 @@ async def update_persona(body: PersonaUpdate, user: User = Depends(get_user_from
 
 
 # ---------- App setup ----------
+@api_router.post("/voice/speak")
+async def voice_speak(request: Request, user: User = Depends(get_user_from_request)):
+    payload = await request.json()
+    text = str(payload.get("text", "")).strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="No text supplied")
+    if len(text) > 6000:
+        text = text[:6000]
+    clean = re.sub(r"[\\*_#`]+", "", text).strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="No speakable text supplied")
+
+    voice = os.getenv("EMBER_TTS_VOICE", "clb")
+    with tempfile.TemporaryDirectory(prefix="ember-tts-") as tmp:
+        wav = os.path.join(tmp, "ember.wav")
+        try:
+            synth = await asyncio.to_thread(
+                subprocess.run,
+                ["RHVoice-test", "-p", voice, "-r", "98", "-o", wav],
+                input=clean,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=30,
+                check=True,
+            )
+            await asyncio.to_thread(
+                subprocess.run,
+                ["pw-play", "--target", "auto", "--latency", "50ms", wav],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=60,
+                check=True,
+            )
+        except Exception as exc:
+            logger.exception("Ember TTS playback failed")
+            raise HTTPException(status_code=503, detail=f"Voice playback unavailable: {exc}") from exc
+    return {"ok": True, "voice": voice}
+
 app.include_router(api_router)
 
 app.add_middleware(

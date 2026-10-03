@@ -2,33 +2,23 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Mic, MicOff, Radio } from "lucide-react";
 import { api } from "@/lib/api";
 
-function pickVoice() {
-  const voices = window.speechSynthesis?.getVoices?.() || [];
-  const preferred = [
-    /Samantha/i, /Ava/i, /Jenny/i, /Aria/i, /Google US English/i,
-    /Microsoft.*Natural/i, /Alex/i, /Daniel/i
-  ];
-  for (const re of preferred) {
-    const match = voices.find((v) => re.test(v.name) && /^en(-US)?/i.test(v.lang));
-    if (match) return match;
+export async function speakEmber(text) {
+  const clean = (text || "").replace(/[*_#`]/g, "").trim();
+  if (!clean) return;
+  try {
+    await api.post("/voice/speak", { text: clean }, { timeout: 30000 });
+  } catch (e) {
+    console.error("Ember voice playback failed", e);
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(clean);
+      const voices = window.speechSynthesis.getVoices?.() || [];
+      u.voice = voices.find(v => /^en(-US)?/i.test(v.lang)) || voices.find(v => /^en/i.test(v.lang)) || null;
+      u.lang = u.voice?.lang || "en-US";
+      u.rate = 0.98; u.pitch = 1.0; u.volume = 1.0;
+      window.speechSynthesis.speak(u);
+    }
   }
-  return voices.find((v) => /^en-US/i.test(v.lang) && !/robot|synthetic/i.test(v.name))
-    || voices.find((v) => /^en/i.test(v.lang))
-    || voices[0]
-    || null;
-}
-
-export function speakEmber(text) {
-  if (!text || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text.replace(/[*_#`]/g, ""));
-  const voice = pickVoice();
-  if (voice) utterance.voice = voice;
-  utterance.lang = voice?.lang || "en-US";
-  utterance.rate = 0.98;
-  utterance.pitch = 1.0;
-  utterance.volume = 1.0;
-  window.speechSynthesis.speak(utterance);
 }
 
 export default function VoiceControls({ onSend, disabled, onVoiceModeChange }) {
