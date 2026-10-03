@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Cookie, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Cookie, Header, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -11,6 +11,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
+import subprocess
+import tempfile
 from datetime import datetime, timezone, timedelta
 
 
@@ -614,6 +616,71 @@ async def delete_memory(mem_id: str, user: User = Depends(get_user_from_request)
         raise HTTPException(404, "Memory not found")
     return {"ok": True}
 
+
+# Voice / local speech-to-text
+VOSK_MODEL_PATH = os.environ.get("VOSK_MODEL_PATH", "/home/justin/.local/share/vosk-models/small-en")
+
+def _transcribe_vosk(wav_path: str) -> str:
+    script = r'''
+import json, sys, wave
+sys.path.insert(0, "/home/justin/.local/lib/python3.13/site-packages")
+from vosk import Model, KaldiRecognizer
+model = Model(sys.argv[2])
+wf = wave.open(sys.argv[1], "rb")
+if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
+    raise RuntimeError("Voice audio must be mono 16-bit PCM at 16 kHz")
+rec = KaldiRecognizer(model, wf.getframerate())
+parts = []
+while True:
+    data = wf.readframes(4000)
+    if not data:
+        break
+    if rec.AcceptWaveform(data):
+        result = json.loads(rec.Result())
+        if result.get("text"):
+            parts.append(result["text"])
+final = json.loads(rec.FinalResult())
+if final.get("text"):
+    parts.append(final["text"])
+print(" ".join(parts).strip())
+'''
+    result = subprocess.run(
+        ["/usr/bin/python3", "-c", script, wav_path, VOSK_MODEL_PATH],
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "Local speech recognition failed")
+    return result.stdout.strip()
+
+@api_router.post("/voice/transcribe")
+async def voice_transcribe(audio: UploadFile = File(...), user: User = Depends(get_user_from_request)):
+    if not audio.content_type or not audio.content_type.startswith("audio/"):
+        raise HTTPException(400, "Voice upload must be audio")
+    raw = await audio.read()
+    if len(raw) > 15 * 1024 * 1024:
+        raise HTTPException(413, "Voice recording is too large")
+    try:
+        with tempfile.TemporaryDirectory(prefix="ember-voice-") as tmp:
+            source = os.path.join(tmp, "input.webm")
+            wav = os.path.join(tmp, "voice.wav")
+            with open(source, "wb") as f:
+                f.write(raw)
+            ffmpeg = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source,
+                 "-ar", "16000", "-ac", "1", "-sample_fmt", "s16", wav],
+                capture_output=True, text=True, timeout=30,
+            )
+            if ffmpeg.returncode != 0:
+                raise RuntimeError(ffmpeg.stderr.strip() or "Audio conversion failed")
+            text = await asyncio.to_thread(_transcribe_vosk, wav)
+            return {"text": text}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Voice processing timed out")
+    except Exception as e:
+        logger.exception("Voice transcription failed")
+        raise HTTPException(500, f"Voice transcription failed: {e}")
 
 # Settings / Persona
 @api_router.get("/settings/persona")

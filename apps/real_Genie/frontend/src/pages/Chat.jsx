@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import SettingsDrawer from "@/components/SettingsDrawer";
+import VoiceControls, { speakEmber } from "@/components/VoiceControls";
 
 const AI_AVATAR =
   "https://images.unsplash.com/photo-1552688419-9949ce9dd731?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHdhdGVyY29sb3IlMjB0ZXh0dXJlJTIwdGVycmFjb3R0YSUyMHNhZ2V8ZW58MHx8fG9yYW5nZXwxNzc3MzYzNDk1fDA&ixlib=rb-4.1.0&q=85";
@@ -344,7 +345,7 @@ function MemoryPanel({ memories, onAdd, onDelete, onEdit, mobileOpen, onCloseMob
   );
 }
 
-function ChatInput({ onSend, disabled }) {
+function ChatInput({ onSend, disabled, onVoiceModeChange }) {
   const [value, setValue] = useState("");
   const taRef = useRef(null);
 
@@ -380,6 +381,7 @@ function ChatInput({ onSend, disabled }) {
           placeholder="Say anything. I'm here."
           className="flex-1 max-h-40 min-h-[44px] bg-transparent border-none focus:outline-none resize-none py-3 font-body text-[15px] text-[#2C2C28] placeholder:text-[#A0A095]"
         />
+        <VoiceControls onSend={onSend} disabled={disabled} onVoiceModeChange={onVoiceModeChange} />
         <button
           data-testid="send-button"
           onClick={submit}
@@ -410,6 +412,7 @@ export default function Chat({ user, onLogout }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [persona, setPersona] = useState("");
   const [defaultPersona, setDefaultPersona] = useState("");
+  const [voiceMode, setVoiceMode] = useState(false);
   const scrollRef = useRef(null);
 
   const loadConversations = useCallback(async () => {
@@ -512,6 +515,7 @@ export default function Chat({ user, onLogout }) {
       // Stream reveal the assistant message
       await streamReveal(data.assistant_message.id, data.assistant_message.content);
       setMessages((m) => [...m, data.assistant_message]);
+      if (voiceMode) speakEmber(data.assistant_message.content);
 
       loadConversations();
       setTimeout(loadMemories, 2500);
@@ -594,7 +598,7 @@ export default function Chat({ user, onLogout }) {
           )}
         </div>
 
-        <ChatInput onSend={sendMessage} disabled={sending} />
+        <ChatInput onSend={sendMessage} disabled={sending} onVoiceModeChange={setVoiceMode} />
       </main>
 
       <MemoryPanel
