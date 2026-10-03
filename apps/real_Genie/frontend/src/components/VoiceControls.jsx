@@ -101,6 +101,7 @@ export default function VoiceControls({ onSend, disabled, onVoiceModeChange }) {
       setStatus("Listening…");
 
       const ctx = new AudioContext();
+      await ctx.resume();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       const source = ctx.createMediaStreamSource(stream);
@@ -118,7 +119,7 @@ export default function VoiceControls({ onSend, disabled, onVoiceModeChange }) {
           sum += n * n;
         }
         const rms = Math.sqrt(sum / data.length);
-        if (rms > 0.025) {
+        if (rms > 0.01) {
           speechStartedRef.current = true;
           silenceSinceRef.current = null;
         } else if (speechStartedRef.current) {
