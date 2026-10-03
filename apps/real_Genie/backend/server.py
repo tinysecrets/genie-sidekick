@@ -469,63 +469,6 @@ async def extract_memories_async(user_id: str, user_text: str, assistant_text: s
             existing_set.add(fact.lower())
     except Exception as e:
         logger.warning(f"Memory extraction failed: {e}")
-@api_router.post("/chat")
-async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(500, "LLM key not configured")
-
-    conv_id = req.conversation_id
-    if conv_id:
-        conv = await db.conversations.find_one({"id": conv_id, "user_id": user.user_id}, {"_id": 0})
-        if not conv:
-            raise HTTPException(404, "Conversation not found")
-    else:
-        conv = Conversation(user_id=user.user_id).model_dump()
-        await db.conversations.insert_one(conv)
-        conv_id = conv["id"]
-
-    user_msg = Message(user_id=user.user_id, conversation_id=conv_id, role="user", content=req.message)
-    await db.messages.insert_one(user_msg.model_dump())
-
-    history = await get_chat_history(user.user_id, conv_id)
-    system_prompt = await build_system_prompt(user)
-
-    chat_client = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"{conv_id}-{uuid.uuid4().hex[:8]}",  # fresh session per call
-        system_message=system_prompt,
-    ).with_model(MODEL_PROVIDER, MODEL_NAME)
-
-    # Replay prior turns (excluding the just-stored user message)
-    prior = [m for m in history if m["id"] != user_msg.id]
-    for m in prior:
-        if m["role"] == "user":
-            await chat_client.send_message(UserMessage(text=m["content"]))
-
-    try:
-        response_text = await chat_client.send_message(UserMessage(text=req.message))
-    except Exception as e:
-        logger.error(f"LLM error: {e}")
-        raise HTTPException(500, f"LLM call failed: {str(e)}")
-
-    assistant_msg = Message(user_id=user.user_id, conversation_id=conv_id, role="assistant", content=response_text)
-    await db.messages.insert_one(assistant_msg.model_dump())
-
-    updates = {"updated_at": now_iso()}
-    if conv.get("title") == "New conversation":
-        title = req.message.strip().split("\n")[0][:60]
-        if len(req.message) > 60:
-            title += "..."
-        updates["title"] = title or "New conversation"
-    await db.conversations.update_one({"id": conv_id, "user_id": user.user_id}, {"$set": updates})
-
-    asyncio.create_task(extract_memories_async(user.user_id, req.message, response_text))
-
-    return {
-        "conversation_id": conv_id,
-        "user_message": user_msg.model_dump(),
-        "assistant_message": assistant_msg.model_dump(),
-    }
 # Chat
 @api_router.post("/chat")
 async def chat(req: ChatRequest, user: User = Depends(get_user_from_request)):
