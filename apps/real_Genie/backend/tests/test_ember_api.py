@@ -18,7 +18,11 @@ if not BASE_URL:
                 BASE_URL = line.split("=", 1)[1].strip()
                 break
 BASE_URL = (BASE_URL or "").rstrip("/")
-API = f"{BASE_URL}/api"
+pytestmark = pytest.mark.skipif(
+    not BASE_URL,
+    reason="integration test requires REACT_APP_BACKEND_URL for an explicit running test API",
+)
+API = f"{BASE_URL}/api" if BASE_URL else ""
 
 
 @pytest.fixture(scope="session")

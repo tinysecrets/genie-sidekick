@@ -16,10 +16,13 @@ if not BASE_URL:
                 BASE_URL = line.split("=", 1)[1].strip()
                 break
 BASE_URL = (BASE_URL or "").rstrip("/")
-API = f"{BASE_URL}/api"
-
 TOKEN_A = os.environ.get("TOKEN_A")
 TOKEN_B = os.environ.get("TOKEN_B")
+pytestmark = pytest.mark.skipif(
+    not BASE_URL or not TOKEN_A or not TOKEN_B,
+    reason="auth integration test requires REACT_APP_BACKEND_URL plus seeded TOKEN_A and TOKEN_B",
+)
+API = f"{BASE_URL}/api" if BASE_URL else ""
 
 
 def _auth(t):
